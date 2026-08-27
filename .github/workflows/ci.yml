@@ -1,0 +1,22 @@
+# CI minimale : analyse statique + tests métier à chaque push.
+# Fonctionne sans Qt : la logique métier est volontairement découplée de PySide6.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installation des outils
+        run: pip install ruff openpyxl
+      - name: Analyse statique (ruff)
+        run: ruff check .
+      - name: Tests de la logique métier
+        run: python tests/test_calculator.py

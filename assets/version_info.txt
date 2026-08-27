@@ -1,0 +1,36 @@
+# Version Windows de VehicleCostCalculator.
+# Structure attendue par PyInstaller (fichier "version_file") :
+#     https://pyinstaller.org/en/stable/usage.html#windows-version-info-file
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 0, 0, 0),
+    prodvers=(1, 0, 0, 0),
+    mask=0x3F,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          "040C04B0",  # français (040C), Unicode (04B0)
+          [
+            StringStruct("CompanyName", "VehicleCostCalculator"),
+            StringStruct("FileDescription", "Calculateur de coût de revient — véhicules importés (Algérie)"),
+            StringStruct("FileVersion", "1.2.0.0"),
+            StringStruct("InternalName", "VehicleCostCalculator"),
+            StringStruct("LegalCopyright", "© 2026 — Usage libre"),
+            StringStruct("OriginalFilename", "VehicleCostCalculator.exe"),
+            StringStruct("ProductName", "Calculateur de coût de revient"),
+            StringStruct("ProductVersion", "1.2.0.0"),
+          ],
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct("Translation", [1036, 1200])]),  # 1036 = français
+  ],
+)
