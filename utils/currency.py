@@ -78,6 +78,13 @@ def format_amount(value: Decimal, suffix: str = "DA", decimals: int | None = Non
     return f"{format_number(value, decimals)} {suffix}"
 
 
+def format_money(
+    value: Decimal, suffix: str = "DA", decimals: int | None = None
+) -> str:
+    """Montant dans une devise quelconque : « 8 200 USD », « 1 700,00 EUR »…"""
+    return format_amount(value, suffix, decimals)
+
+
 def format_dzd(value: Decimal, decimals: int | None = None) -> str:
     """Montant en dinars algériens : « 2 487 500 DA » (ou « … ,50 DA »)."""
     return format_amount(value, "DA", decimals)

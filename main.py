@@ -11,7 +11,7 @@ import sys
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-APP_VERSION = "1.2.0"  # v1.2 : rubans marque/modèle + catalogue téléchargé
+APP_VERSION = "1.4.0"  # v1.4 : taux d'achat et taux de fret séparés
 
 
 def main() -> int:
@@ -44,6 +44,16 @@ def main() -> int:
             f"{exc}\n\nL'application va se fermer.",
         )
         return 1
+
+    # Sauvegarde automatique au démarrage (silencieuse, jamais bloquante) :
+    # protège l'historique sans aucune action de l'utilisateur.
+    try:
+        from database.backup import create_backup, prune_auto_backups
+
+        create_backup("auto")
+        prune_auto_backups()
+    except Exception:  # une sauvegarde ratée ne doit pas bloquer le démarrage
+        pass
 
     from ui.main_window import MainWindow
 

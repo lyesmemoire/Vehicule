@@ -38,6 +38,8 @@ class Simulation:
     frais_portuaires: Decimal
     taxe_vehicule: Decimal
     cout_total: Decimal
+    devise: str = "USD"  # devise du prix/fret saisis
+    taux_fret: Decimal = Decimal("0")  # 0 = identique au taux d'achat
     id: int | None = None
 
     @property
@@ -76,6 +78,7 @@ class Simulation:
             prix_usd=result.prix_usd,
             fret_usd=result.fret_usd,
             taux_change=result.taux_change,
+            taux_fret=result.taux_fret,
             prix_dzd=result.prix_dzd,
             fret_dzd=result.fret_dzd,
             valeur_douaniere=result.valeur_douaniere,
@@ -86,6 +89,7 @@ class Simulation:
             frais_portuaires=result.frais_portuaires,
             taxe_vehicule=result.taxe_vehicule,
             cout_total=result.cout_total,
+            devise=result.devise,
         )
 
     def duplicate(self, new_date: date) -> Simulation:

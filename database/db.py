@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS simulations (
     prix_usd          REAL    NOT NULL,
     fret_usd          REAL    NOT NULL,
     taux_change       REAL    NOT NULL,
+    taux_fret         REAL    NOT NULL DEFAULT 0,  -- 0 = identique au taux d'achat
     prix_dzd          REAL    NOT NULL,
     fret_dzd          REAL    NOT NULL,
     valeur_douaniere  REAL    NOT NULL,
@@ -99,6 +100,7 @@ CREATE TABLE IF NOT EXISTS simulations (
     frais_transitaire REAL    NOT NULL,
     frais_portuaires  REAL    NOT NULL,
     taxe_vehicule     REAL    NOT NULL DEFAULT 0,
+    devise            TEXT    NOT NULL DEFAULT 'USD',
     cout_total        REAL    NOT NULL
 );
 
@@ -116,6 +118,10 @@ MIGRATIONS = [
      "ALTER TABLE simulations ADD COLUMN base_tva REAL NOT NULL DEFAULT 0"),
     ("simulations", "taxe_vehicule",
      "ALTER TABLE simulations ADD COLUMN taxe_vehicule REAL NOT NULL DEFAULT 0"),
+    ("simulations", "devise",
+     "ALTER TABLE simulations ADD COLUMN devise TEXT NOT NULL DEFAULT 'USD'"),
+    ("simulations", "taux_fret",
+     "ALTER TABLE simulations ADD COLUMN taux_fret REAL NOT NULL DEFAULT 0"),
 ]
 
 # Catalogue de démonstration (inséré uniquement si la table est vide).

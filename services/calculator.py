@@ -35,6 +35,21 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "frais_transitaire": "70000",
     "frais_portuaires": "130000",
     "taxe_vehicule": "0",
+    "taux_eur": "270",
+    "taux_cny": "35",
+    "taux_fret_usd": "250",
+    "taux_fret_eur": "270",
+    "taux_fret_cny": "35",
+}
+
+# Devises gérées et clés de paramètres de leurs taux par défaut.
+# « achat » = taux appliqué au prix du véhicule (souvent taux parallèle) ;
+# « fret »  = taux appliqué au fret (souvent taux bancaire officiel).
+DEVISES = ("USD", "EUR", "CNY")
+DEVISE_RATE_KEYS = {"USD": "taux_change", "EUR": "taux_eur", "CNY": "taux_cny"}
+DEVISE_RATE_FALLBACKS = {"USD": "250", "EUR": "270", "CNY": "35"}
+DEVISE_FREIGHT_KEYS = {
+    "USD": "taux_fret_usd", "EUR": "taux_fret_eur", "CNY": "taux_fret_cny",
 }
 
 
@@ -87,7 +102,7 @@ class SimulationResult:
     cylindree: Decimal
     prix_usd: Decimal
     fret_usd: Decimal
-    taux_change: Decimal
+    taux_change: Decimal      # taux appliqué au prix d'achat
 
     prix_dzd: Decimal
     fret_dzd: Decimal
@@ -100,6 +115,8 @@ class SimulationResult:
     frais_portuaires: Decimal
     taxe_vehicule: Decimal
     cout_total: Decimal
+    devise: str = "USD"  # devise du prix et du fret saisis
+    taux_fret: Decimal = Decimal("0")  # taux appliqué au fret (0 = identique à achat)
 
 
 def convert_to_dzd(montant_usd: Decimal, taux_usd_dzd: Decimal) -> Decimal:
@@ -160,12 +177,19 @@ def compute_cost(
     taux_change: Decimal,
     params: CalculationParams | None = None,
     taxe_vehicule: Decimal = Decimal("0"),
+    devise: str = "USD",
+    taux_fret: Decimal | None = None,
 ) -> SimulationResult:
-    """Calcule l'ensemble des composantes du coût d'importation."""
+    """Calcule l'ensemble des composantes du coût d'importation.
+
+    ``taux_change`` s'applique au prix d'achat, ``taux_fret`` au fret
+    (par défaut : identique au taux d'achat).
+    """
     params = params or CalculationParams.defaults()
+    taux_fret = taux_change if taux_fret is None else taux_fret
 
     prix_dzd = convert_to_dzd(prix_usd, taux_change)
-    fret_dzd = convert_to_dzd(fret_usd, taux_change)
+    fret_dzd = convert_to_dzd(fret_usd, taux_fret)
     valeur_douaniere = _q2(prix_dzd + fret_dzd)
 
     taux_douane = calculate_customs_rate(
@@ -197,6 +221,7 @@ def compute_cost(
         prix_usd=_q2(prix_usd),
         fret_usd=_q2(fret_usd),
         taux_change=taux_change,
+        taux_fret=_q2(taux_fret),
         prix_dzd=prix_dzd,
         fret_dzd=fret_dzd,
         valeur_douaniere=valeur_douaniere,
@@ -208,4 +233,5 @@ def compute_cost(
         frais_portuaires=_q2(params.frais_portuaires),
         taxe_vehicule=_q2(taxe_vehicule),
         cout_total=cout_total,
+        devise=devise,
     )

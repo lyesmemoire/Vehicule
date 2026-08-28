@@ -3,6 +3,37 @@
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [sémantique](https://semver.org/lang/fr/) : `MAJEUR.MINEUR.CORRECTIF`.
 
+## [1.4.0] — 2026-08-28
+
+### Ajouts
+- **Taux d'achat et taux de fret séparés** : le fret est souvent payé au taux
+  bancaire officiel quand le véhicule est acheté au taux parallèle. Le formulaire
+  comporte désormais « Taux achat (DA/devise) » et « Taux fret (DA/devise) »
+  (vide = identique au taux d'achat). Valeurs par défaut par devise configurables
+  dans les Paramètres (Taux fret USD/EUR/CNY). La valeur douanière devient
+  `prix × taux achat + fret × taux fret`. Nouvelle colonne « Taux fret » dans
+  l'Historique et dans les exports ; résumé presse-papiers enrichi.
+
+## [1.3.0] — 2026-08-27
+
+### Ajouts
+- **Sauvegarde et restauration des données** : copie automatique de la base au
+  démarrage (les 10 dernières conservées) ; dans l'onglet Paramètres :
+  *Créer une sauvegarde*, *Restaurer une sauvegarde…* (avec copie de sécurité
+  préalable et vérification d'intégrité) et *Ouvrir le dossier*.
+- **Multi-devises USD / EUR / CNY** : sélecteur de devise par simulation
+  (libellés Prix/Fret synchronisés), taux par défaut éditables par devise
+  dans les Paramètres (EUR 270, CNY 35 par défaut). La devise est enregistrée
+  avec chaque simulation (migration SQLite automatique), affichée dans
+  l'Historique, l'Évolution des prix (garde-fou « devises mélangées ») et les exports.
+- **Build GitHub automatique** (`.github/workflows/release.yml`) : un tag
+  `vX.Y.Z` déclenche lint + tests + build PyInstaller sur Windows et publie
+  le `.zip` (avec empreinte SHA-256) dans les Releases.
+
+### Corrigé
+- Réplique web : le taux saisi dans le formulaire était ignoré au profit du
+  taux global (le calcul utilise désormais le taux de la simulation).
+
 ## [1.2.0] — 2026-08-27
 
 ### Ajouts

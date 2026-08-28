@@ -80,6 +80,7 @@ class MainWindow(QMainWindow):
         self.calc_page.simulation_saved.connect(self._refresh_data_pages)
         self.history_page.simulation_activated.connect(self._open_simulation)
         self.settings_page.settings_saved.connect(self.calc_page.on_settings_changed)
+        self.settings_page.database_restored.connect(self._on_database_restored)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
     # ------------------------------------------------------------------ actions
@@ -99,6 +100,13 @@ class MainWindow(QMainWindow):
 
     def _refresh_data_pages(self) -> None:
         """Met à jour Historique et Évolution après enregistrement."""
+        self.history_page.refresh()
+        self.evolution_page.refresh()
+
+    def _on_database_restored(self) -> None:
+        """Après restauration d'une sauvegarde : réaligne toute l'interface."""
+        self.calc_page.reset_clicked(silent=True)  # contexte de données changé
+        self.calc_page.on_settings_changed()
         self.history_page.refresh()
         self.evolution_page.refresh()
 

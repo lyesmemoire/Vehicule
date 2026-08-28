@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from datetime import date
+from decimal import Decimal
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
@@ -33,7 +34,14 @@ from database.repositories import CatalogRepository, SettingsRepository, Simulat
 from models.simulation import Simulation
 from models.vehicle import Vehicle
 from services import vehicle_catalog
-from services.calculator import CalculationParams, SimulationResult, compute_cost
+from services.calculator import (
+    DEVISE_FREIGHT_KEYS,
+    DEVISE_RATE_FALLBACKS,
+    DEVISE_RATE_KEYS,
+    CalculationParams,
+    SimulationResult,
+    compute_cost,
+)
 from ui.components import (
     CYLINDER_PATTERN,
     MONEY_PATTERN,
@@ -90,6 +98,7 @@ class CalculatorPage(QWidget):
         self._editing_id: int | None = None
         self._updating = False  # évite les recalcs pendant une programmation de champs
         self._default_taux = parse_decimal("250")
+        self._default_taux_fret = parse_decimal("250")
         self._default_taxe = parse_decimal("0")
 
         root = QHBoxLayout(self)
@@ -134,6 +143,11 @@ class CalculatorPage(QWidget):
         self.cylindree_edit.setPlaceholderText("ex : 1.5")
         attach_decimal_validator(self.cylindree_edit, CYLINDER_PATTERN)
 
+        self.devise_cb = QComboBox()
+        self.devise_cb.setObjectName("ribbon")
+        self.devise_cb.addItems(list(DEVISE_RATE_FALLBACKS))
+        self.devise_cb.setCurrentText("USD")
+
         self.prix_edit = QLineEdit()
         self.prix_edit.setPlaceholderText("ex : 7500")
         attach_decimal_validator(self.prix_edit, MONEY_PATTERN)
@@ -143,8 +157,12 @@ class CalculatorPage(QWidget):
         attach_decimal_validator(self.fret_edit, MONEY_PATTERN)
 
         self.taux_edit = QLineEdit()
-        self.taux_edit.setPlaceholderText("ex : 250")
+        self.taux_edit.setPlaceholderText("ex : 250 (parallèle)")
         attach_decimal_validator(self.taux_edit, RATE_PATTERN)
+
+        self.taux_fret_edit = QLineEdit()
+        self.taux_fret_edit.setPlaceholderText("vide = identique au taux d'achat")
+        attach_decimal_validator(self.taux_fret_edit, RATE_PATTERN)
 
         self.taxe_edit = QLineEdit()
         self.taxe_edit.setPlaceholderText("ex : 25000 — vide ou 0 si aucune")
@@ -162,9 +180,15 @@ class CalculatorPage(QWidget):
         form.addRow(field_label("Modèle"), self.modele_cb)
         form.addRow(field_label("Année"), self.annee_sp)
         form.addRow(field_label("Cylindrée (L)"), self.cylindree_edit)
-        form.addRow(field_label("Prix véhicule (USD)"), self.prix_edit)
-        form.addRow(field_label("Fret (USD)"), self.fret_edit)
-        form.addRow(field_label("Taux USD/DZD"), self.taux_edit)
+        self.prix_label = field_label("Prix véhicule (USD)")
+        self.fret_label = field_label("Fret (USD)")
+        self.taux_label = field_label("Taux achat (DA/USD)")
+        self.taux_fret_label = field_label("Taux fret (DA/USD)")
+        form.addRow(field_label("Devise"), self.devise_cb)
+        form.addRow(self.prix_label, self.prix_edit)
+        form.addRow(self.fret_label, self.fret_edit)
+        form.addRow(self.taux_label, self.taux_edit)
+        form.addRow(self.taux_fret_label, self.taux_fret_edit)
         form.addRow(field_label("Taxe véhicule (DZD)"), self.taxe_edit)
         form.addRow(field_label("Date de la simulation"), self.date_edit)
         layout.addLayout(form)
@@ -219,8 +243,9 @@ class CalculatorPage(QWidget):
         self.marque_cb.currentTextChanged.connect(self._on_brand_changed)
         self.modele_cb.currentTextChanged.connect(self._on_input_changed)
         self.annee_sp.valueChanged.connect(self._on_input_changed)
+        self.devise_cb.currentTextChanged.connect(self._on_devise_changed)
         for edit in (self.cylindree_edit, self.prix_edit, self.fret_edit, self.taux_edit,
-                     self.taxe_edit):
+                     self.taux_fret_edit, self.taxe_edit):
             edit.textChanged.connect(self._on_input_changed)
             edit.returnPressed.connect(self.compute_clicked)  # Entrée = calculer
         self.date_edit.dateChanged.connect(self._on_input_changed)
@@ -300,7 +325,9 @@ class CalculatorPage(QWidget):
             prix_usd=self.prix_edit.text(),
             fret_usd=self.fret_edit.text(),
             taux_change=self.taux_edit.text(),
+            taux_fret=self.taux_fret_edit.text(),
             taxe_vehicule=self.taxe_edit.text(),
+            devise=self.devise_cb.currentText(),
             date_simulation=self._selected_date(),
             require_identity=require_identity,
         )
@@ -321,7 +348,8 @@ class CalculatorPage(QWidget):
 
         vehicle = Vehicle(inputs.marque, inputs.modele, inputs.annee, inputs.cylindree)
         result = compute_cost(vehicle, inputs.prix_usd, inputs.fret_usd, inputs.taux_change,
-                              params, taxe_vehicule=inputs.taxe_vehicule)
+                              params, taxe_vehicule=inputs.taxe_vehicule,
+                              devise=inputs.devise, taux_fret=inputs.taux_fret)
         self._last_result = result
         self._apply_result(result)
         self.stale_label.hide()
@@ -343,7 +371,8 @@ class CalculatorPage(QWidget):
 
         vehicle = Vehicle(inputs.marque, inputs.modele, inputs.annee, inputs.cylindree)
         result = compute_cost(vehicle, inputs.prix_usd, inputs.fret_usd, inputs.taux_change,
-                              params, taxe_vehicule=inputs.taxe_vehicule)
+                              params, taxe_vehicule=inputs.taxe_vehicule,
+                              devise=inputs.devise, taux_fret=inputs.taux_fret)
         sim = Simulation.from_result(result, inputs.date_simulation, sim_id=self._editing_id)
 
         if self._editing_id is not None:
@@ -391,19 +420,28 @@ class CalculatorPage(QWidget):
             self.prix_edit.clear()
             self.fret_edit.clear()
             try:
-                settings = self.settings_repo.get_all()
-                default_taux = decimal_to_str(
-                    parse_decimal(settings.get("taux_change", "250"))
-                )
                 default_taxe = decimal_to_str(
-                    parse_decimal(settings.get("taxe_vehicule", "0"))
+                    parse_decimal(self.settings_repo.get_all().get("taxe_vehicule", "0"))
                 )
             except (ValueError, DatabaseError):
-                default_taux, default_taxe = "250", "0"
+                default_taxe = "0"
+            # Taux achat et taux fret par défaut de la devise courante…
+            devise = self.devise_cb.currentText() or "USD"
+            default_taux = decimal_to_str(self._default_rate_for(devise))
+            default_fret = decimal_to_str(self._default_rate_for(devise, freight=True))
             self.taux_edit.setText(default_taux)
+            self.taux_fret_edit.setText(default_fret)
             self.taxe_edit.setText(default_taxe)
             self._default_taux = parse_decimal(default_taux)
+            self._default_taux_fret = parse_decimal(default_fret)
             self._default_taxe = parse_decimal(default_taxe)
+            # …puis retour à l'USD : les deux taux suivent leurs défauts USD
+            self.devise_cb.setCurrentText("USD")
+            self._update_currency_labels("USD")
+            self._default_taux = self._default_rate_for("USD")
+            self._default_taux_fret = self._default_rate_for("USD", freight=True)
+            self.taux_edit.setText(decimal_to_str(self._default_taux))
+            self.taux_fret_edit.setText(decimal_to_str(self._default_taux_fret))
             self.date_edit.setDate(QDate.currentDate())
         finally:
             self._updating = False
@@ -522,6 +560,52 @@ class CalculatorPage(QWidget):
         self.value_labels["taxe_vehicule"].setText(format_dzd(result.taxe_vehicule))
         self.total_value.setText(format_dzd(result.cout_total))
 
+    # ---------------------------------------------------------------- devises
+
+    def _update_currency_labels(self, devise: str | None = None) -> None:
+        """Libellés Prix/Fret/taux synchronisés avec la devise choisie."""
+        devise = (devise or self.devise_cb.currentText() or "USD").strip() or "USD"
+        self.prix_label.setText(f"Prix véhicule ({devise})")
+        self.fret_label.setText(f"Fret ({devise})")
+        self.taux_label.setText(f"Taux achat (DA/{devise})")
+        self.taux_fret_label.setText(f"Taux fret (DA/{devise})")
+
+    def _default_rate_for(self, devise: str, freight: bool = False) -> Decimal:
+        """Taux par défaut (achat ou fret) d'une devise selon les Paramètres."""
+        keys = DEVISE_FREIGHT_KEYS if freight else DEVISE_RATE_KEYS
+        fallbacks = DEVISE_RATE_FALLBACKS
+        key = keys.get(devise, "taux_change")
+        fallback = parse_decimal(fallbacks.get(devise, "250"))
+        try:
+            raw = self.settings_repo.get_all().get(key, "")
+            return parse_decimal(raw) if raw else fallback
+        except (ValueError, DatabaseError):
+            return fallback
+
+    def _on_devise_changed(self, devise: str) -> None:
+        self._update_currency_labels(devise)
+        if self._updating:
+            return
+        # Taux d'achat : suivre le nouveau défaut s'il suivait encore l'ancien
+        try:
+            current = parse_decimal(self.taux_edit.text())
+        except ValueError:
+            current = None
+        if current is None or current == self._default_taux:
+            new_default = self._default_rate_for(devise)
+            self.taux_edit.setText(decimal_to_str(new_default))
+            self._default_taux = new_default
+        # Taux de fret : même logique avec son propre défaut
+        try:
+            current_fret = parse_decimal(self.taux_fret_edit.text())
+        except ValueError:
+            current_fret = None
+        if current_fret is None or current_fret == self._default_taux_fret:
+            new_fret = self._default_rate_for(devise, freight=True)
+            self.taux_fret_edit.setText(decimal_to_str(new_fret))
+            self._default_taux_fret = new_fret
+        self._on_input_changed()
+
     # ------------------------------------------------------------- catalogue
 
     def _load_catalog(self, keep_marque: str, keep_modele: str) -> None:
@@ -585,7 +669,8 @@ class CalculatorPage(QWidget):
             return False
         vehicle = Vehicle(inputs.marque, inputs.modele, inputs.annee, inputs.cylindree)
         result = compute_cost(vehicle, inputs.prix_usd, inputs.fret_usd, inputs.taux_change,
-                              params, taxe_vehicule=inputs.taxe_vehicule)
+                              params, taxe_vehicule=inputs.taxe_vehicule,
+                              devise=inputs.devise, taux_fret=inputs.taux_fret)
         self._last_result = result
         self._apply_result(result)
         return True
@@ -596,10 +681,9 @@ class CalculatorPage(QWidget):
             settings = self.settings_repo.get_all()
         except DatabaseError:
             settings = {}
-        try:
-            new_default = parse_decimal(settings.get("taux_change", "250"))
-        except ValueError:
-            new_default = parse_decimal("250")
+        devise_courante = self.devise_cb.currentText() or "USD"
+        new_default = self._default_rate_for(devise_courante)
+        new_default_fret = self._default_rate_for(devise_courante, freight=True)
 
         current_text = self.taux_edit.text().strip()
         follows_default = not current_text
@@ -611,6 +695,17 @@ class CalculatorPage(QWidget):
         if follows_default:
             self.taux_edit.setText(decimal_to_str(new_default))
         self._default_taux = new_default
+
+        current_fret = self.taux_fret_edit.text().strip()
+        follows_fret = not current_fret
+        if not follows_fret:
+            try:
+                follows_fret = parse_decimal(current_fret) == self._default_taux_fret
+            except ValueError:
+                follows_fret = False
+        if follows_fret:
+            self.taux_fret_edit.setText(decimal_to_str(new_default_fret))
+        self._default_taux_fret = new_default_fret
 
         try:
             new_default_taxe = parse_decimal(settings.get("taxe_vehicule", "0"))
@@ -638,6 +733,11 @@ class CalculatorPage(QWidget):
         try:
             self.marque_cb.setEditText(sim.marque)
             self._refresh_model_combo(sim.marque, keep_text=sim.modele)
+            self.devise_cb.setCurrentText(sim.devise)
+            self._update_currency_labels(sim.devise)
+            fret_rate = sim.taux_fret if sim.taux_fret > 0 else sim.taux_change
+            self.taux_fret_edit.setText(decimal_to_str(fret_rate))
+            self._default_taux_fret = fret_rate
             self.annee_sp.setValue(sim.annee)
             self.cylindree_edit.setText(decimal_to_str(sim.cylindree))
             self.prix_edit.setText(decimal_to_str(sim.prix_usd))

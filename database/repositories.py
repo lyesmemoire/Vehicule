@@ -33,6 +33,8 @@ def _row_to_simulation(row) -> Simulation:
         prix_usd=_dec(row["prix_usd"]),
         fret_usd=_dec(row["fret_usd"]),
         taux_change=_dec(row["taux_change"]),
+        taux_fret=_dec(row["taux_fret"]),
+        devise=row["devise"],
         prix_dzd=_dec(row["prix_dzd"]),
         fret_dzd=_dec(row["fret_dzd"]),
         valeur_douaniere=_dec(row["valeur_douaniere"]),
@@ -178,8 +180,9 @@ class SimulationRepository:
 
     _COLUMNS = (
         "date, marque, modele, annee, cylindree, prix_usd, fret_usd, taux_change, "
-        "prix_dzd, fret_dzd, valeur_douaniere, taux_douane, droits_douane, tva, "
-        "frais_transitaire, frais_portuaires, taxe_vehicule, cout_total"
+        "taux_fret, devise, prix_dzd, fret_dzd, valeur_douaniere, taux_douane, "
+        "droits_douane, tva, frais_transitaire, frais_portuaires, taxe_vehicule, "
+        "cout_total"
     )
 
     def save(self, sim: Simulation) -> int:
@@ -193,6 +196,8 @@ class SimulationRepository:
             float(sim.prix_usd),
             float(sim.fret_usd),
             float(sim.taux_change),
+            float(sim.taux_fret),
+            sim.devise,
             float(sim.prix_dzd),
             float(sim.fret_dzd),
             float(sim.valeur_douaniere),
@@ -210,7 +215,7 @@ class SimulationRepository:
                 if sim.id is None:
                     cursor = conn.execute(
                         f"INSERT INTO simulations ({self._COLUMNS}) "
-                        f"VALUES ({', '.join('?' * 18)})",
+                        f"VALUES ({', '.join('?' * 20)})",
                         values,
                     )
                     sim_id = cursor.lastrowid

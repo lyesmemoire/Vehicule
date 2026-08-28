@@ -149,7 +149,7 @@
   L'application Windows réelle se lance depuis le dossier du projet : <b>python main.py</b> (voir README).
 </div>
 <div class="wrap">
-  <h1>Calculateur de coût de revient — Véhicules importés (Algérie)<small>v1.2.0 — aperçu</small></h1>
+  <h1>Calculateur de coût de revient — Véhicules importés (Algérie)<small>v1.4.0 — aperçu</small></h1>
 
   <div class="tabs">
     <div class="tab active" data-page="calc">Calculateur</div>
@@ -191,9 +191,12 @@
           <label class="fl">Année</label>
           <select id="f-annee"></select>
           <label class="fl">Cylindrée (L)</label><input type="text" id="f-cyl" inputmode="decimal" placeholder="ex : 1.5"/>
-          <label class="fl">Prix véhicule (USD)</label><input type="text" id="f-prix" inputmode="decimal" placeholder="ex : 7500"/>
-          <label class="fl">Fret (USD)</label><input type="text" id="f-fret" inputmode="decimal" placeholder="ex : 1700"/>
-          <label class="fl">Taux USD/DZD</label><input type="text" id="f-taux" inputmode="decimal" placeholder="ex : 250"/>
+          <label class="fl">Devise</label>
+          <select id="f-devise"><option>USD</option><option>EUR</option><option>CNY</option></select>
+          <label class="fl" id="l-prix">Prix véhicule (USD)</label><input type="text" id="f-prix" inputmode="decimal" placeholder="ex : 7500"/>
+          <label class="fl" id="l-fret">Fret (USD)</label><input type="text" id="f-fret" inputmode="decimal" placeholder="ex : 1700"/>
+          <label class="fl" id="l-taux">Taux achat (DA/USD)</label><input type="text" id="f-taux" inputmode="decimal" placeholder="ex : 250 (parallèle)"/>
+          <label class="fl" id="l-tauxfret">Taux fret (DA/USD)</label><input type="text" id="f-tauxfret" inputmode="decimal" placeholder="vide = identique au taux d'achat"/>
           <label class="fl">Taxe véhicule (DZD)</label><input type="text" id="f-taxev" inputmode="decimal" placeholder="ex : 25000 — vide ou 0 si aucune"/>
           <label class="fl">Date de la simulation</label><input type="text" id="f-date" placeholder="JJ/MM/AAAA"/>
         </div>
@@ -269,8 +272,9 @@
     <table id="h-table">
       <thead><tr>
         <th data-k="date">Date</th><th data-k="marque">Marque</th><th data-k="modele">Modèle</th>
-        <th data-k="annee" class="num">Année</th><th data-k="prix_usd" class="num">Prix (USD)</th>
-        <th data-k="fret_usd" class="num">Fret (USD)</th><th data-k="taux_change" class="num">Taux (DA/USD)</th>
+        <th data-k="annee" class="num">Année</th><th data-k="prix_usd" class="num">Prix</th>
+        <th data-k="fret_usd" class="num">Fret</th><th data-k="taux_change" class="num">Taux achat</th>
+        <th data-k="taux_fret" class="num">Taux fret</th>
         <th data-k="cout_total" class="num">Coût total (DZD)</th>
       </tr></thead>
       <tbody></tbody>
@@ -290,7 +294,7 @@
     <div class="evo-layout">
       <div class="panel evo-left">
         <div class="sec">Historique chronologique</div>
-        <table><thead><tr><th>Date</th><th class="num">Prix (USD)</th><th class="num">Coût total (DZD)</th></tr></thead>
+        <table><thead><tr><th>Date</th><th>Devise</th><th class="num">Prix</th><th class="num">Coût total (DZD)</th></tr></thead>
           <tbody id="e-rows"></tbody></table>
         <div class="sec" style="margin-top:16px">Statistiques</div>
         <div class="stats-grid">
@@ -322,6 +326,11 @@
       </div>
       <div class="set-grid">
         <label class="fl">Taux de change USD/DZD</label><input type="text" id="p-taux" inputmode="decimal"/><span class="hint">DA pour 1 USD</span>
+        <label class="fl">Taux de change EUR/DZD</label><input type="text" id="p-tauxeur" inputmode="decimal"/><span class="hint">DA pour 1 EUR</span>
+        <label class="fl">Taux de change CNY/DZD</label><input type="text" id="p-tauxcny" inputmode="decimal"/><span class="hint">DA pour 1 CNY</span>
+        <label class="fl">Taux fret USD/DZD</label><input type="text" id="p-tauxfretusd" inputmode="decimal"/><span class="hint">DA pour 1 USD</span>
+        <label class="fl">Taux fret EUR/DZD</label><input type="text" id="p-tauxfreteur" inputmode="decimal"/><span class="hint">DA pour 1 EUR</span>
+        <label class="fl">Taux fret CNY/DZD</label><input type="text" id="p-tauxfretcny" inputmode="decimal"/><span class="hint">DA pour 1 CNY</span>
         <label class="fl">Taux de TVA</label><input type="text" id="p-tva" inputmode="decimal"/><span class="hint">%</span>
         <label class="fl">Droits de douane — cylindrée ≤ seuil</label><input type="text" id="p-ddle" inputmode="decimal"/><span class="hint">%</span>
         <label class="fl">Droits de douane — cylindrée &gt; seuil</label><input type="text" id="p-ddsup" inputmode="decimal"/><span class="hint">%</span>
@@ -386,7 +395,11 @@ function decStr(n) {
 const r2 = v => Math.round(v * 100) / 100;
 
 /* ---------------------- État global ---------------------------- */
-const DEFAULTS = { taux: 250, tva: 19, ddle: 15, ddsup: 30, seuil: 1.8, trans: 70000, port: 130000, taxev: 0 };
+const DEFAULTS = { taux: 250, tauxEur: 270, tauxCny: 35,
+  tauxFretUsd: 250, tauxFretEur: 270, tauxFretCny: 35,
+  tva: 19, ddle: 15, ddsup: 30, seuil: 1.8, trans: 70000, port: 130000, taxev: 0 };
+const DEVISES = ["USD", "EUR", "CNY"];
+const DEVISE_RATE_KEY = { USD: "taux", EUR: "tauxEur", CNY: "tauxCny" };
 let settings = Object.assign({}, DEFAULTS);
 let nextId = 5;
 let sims = [
@@ -399,7 +412,7 @@ let brands = {
   "Changan": ["CS35 Plus"], "Chery": ["Tiggo 4 Pro"], "Geely": ["Emgrand"],
   "Hyundai": ["Accent"], "Kia": ["Picanto", "Morning"], "Livan": ["X3 Pro", "S6 Pro"],
 };
-let lastResult = null, editingId = null, defaultTaux = 250, defaultTaxev = 0;
+let lastResult = null, editingId = null, defaultTaux = 250, defaultTauxFret = 250, defaultTaxev = 0;
 
 function sim(id, date, marque, modele, annee, cyl, prix, fret) {
   const s = { id, date, marque, modele, annee, cylindree: cyl, prix_usd: prix, fret_usd: fret,
@@ -407,8 +420,9 @@ function sim(id, date, marque, modele, annee, cyl, prix, fret) {
   return Object.assign(s, compute(s));
 }
 function compute(v) {
-  const taux = settings.taux;
-  const prix = r2(v.prix_usd * taux), fret = r2(v.fret_usd * taux);
+  const taux = v.taux_change || settings.taux;              // taux d'achat
+  const tauxFret = v.taux_fret && v.taux_fret > 0 ? v.taux_fret : taux;  // taux du fret
+  const prix = r2(v.prix_usd * taux), fret = r2(v.fret_usd * tauxFret);
   const vd = r2(prix + fret);
   const tx = (v.cylindree <= settings.seuil ? settings.ddle : settings.ddsup) / 100;
   const dd = r2(vd * tx);
@@ -433,7 +447,7 @@ function restore() {
     const raw = localStorage.getItem("vcc_web");
     if (!raw) return;
     const d = JSON.parse(raw);
-    if (d.settings) settings = d.settings;
+    if (d.settings) settings = Object.assign({}, DEFAULTS, d.settings);
     if (d.sims) sims = d.sims;
     if (d.nextId) nextId = d.nextId;
     if (d.brands) brands = d.brands;
@@ -486,8 +500,11 @@ function readInputs() {
   const fret = parseNum($("f-fret").value), taux = parseNum($("f-taux").value);
   const rawTaxe = $("f-taxev").value.trim();
   const taxe = rawTaxe === "" ? 0 : parseNum(rawTaxe);
+  const devise = $("f-devise").value;
+  const rawFretRate = $("f-tauxfret").value.trim();
+  const tauxFret = rawFretRate === "" ? taux : parseNum(rawFretRate);
   return { marque, modele, annee, cylindree: cyl, prix_usd: prix, fret_usd: fret,
-           taux_change: taux, taxe_vehicule: taxe };
+           taux_change: taux, taux_fret: tauxFret, taxe_vehicule: taxe, devise };
 }
 function validate(v, requireIdentity) {
   if (requireIdentity && !v.marque) return "Veuillez saisir la marque du véhicule.";
@@ -502,6 +519,9 @@ function validate(v, requireIdentity) {
     return "Veuillez saisir un taux de change valide (supérieur à 0).";
   if (isNaN(v.taxe_vehicule) || v.taxe_vehicule < 0)
     return "Veuillez saisir un montant de taxe véhicule valide.";
+  if (!DEVISES.includes(v.devise)) return "Devise invalide.";
+  if (isNaN(v.taux_fret) || v.taux_fret <= 0)
+    return "Veuillez saisir un taux de fret valide (supérieur à 0).";
   return null;
 }
 function parseDateFR(t) {
@@ -697,7 +717,10 @@ function isoFromDate(d) {
 function doReset() {
   ["f-marque", "f-modele", "f-cyl", "f-prix", "f-fret"].forEach(id => $(id).value = "");
   $("f-taux").value = decStr(settings.taux);
+  $("f-tauxfret").value = decStr(settings.tauxFretUsd);
   $("f-taxev").value = decStr(settings.taxev);
+  $("f-devise").value = "USD";
+  updateCurrencyLabels("USD");
   $("f-date").value = todayFR();
   fillYears();
   lastResult = null; editingId = null;
@@ -723,9 +746,10 @@ function summaryText(v) {
   return [
     (v.marque + " " + v.modele + " " + v.annee).toUpperCase(),
     "Cylindrée : " + decStr(v.cylindree) + " L",
-    "Prix véhicule : " + fmtUSD(v.prix_usd),
-    "Fret : " + fmtUSD(v.fret_usd),
-    "Taux : " + decStr(v.taux_change) + " DA/USD", "",
+    "Prix véhicule : " + fmt(v.prix_usd) + " " + v.devise,
+    "Fret : " + fmt(v.fret_usd) + " " + v.devise,
+    "Taux achat : " + decStr(v.taux_change) + " DA/" + v.devise,
+    "Taux fret : " + decStr(v.taux_fret && v.taux_fret > 0 ? v.taux_fret : v.taux_change) + " DA/" + v.devise, "",
     "Prix véhicule : " + fmtDA(c.prix_dzd),
     "Fret : " + fmtDA(c.fret_dzd),
     "Valeur douanière : " + fmtDA(c.valeur_douaniere),
@@ -769,21 +793,52 @@ function csvCell(v) {
   if (typeof v === "number") return decStr(v).replace(".", ",");
   return v;
 }
-const CSV_HEADERS = ["Date", "Marque", "Modèle", "Année", "Cylindrée (L)", "Prix véhicule (USD)",
-  "Fret (USD)", "Taux USD/DZD", "Prix véhicule (DZD)", "Fret (DZD)", "Valeur douanière (DZD)",
+const CSV_HEADERS = ["Date", "Marque", "Modèle", "Année", "Devise", "Cylindrée (L)", "Prix véhicule",
+  "Fret", "Taux achat", "Taux fret", "Prix véhicule (DZD)", "Fret (DZD)", "Valeur douanière (DZD)",
   "Taux douane (%)", "Droits de douane (DZD)", "Base TVA (DZD)", "TVA (DZD)",
   "Frais transitaire (DZD)", "Frais portuaires (DZD)", "Taxe véhicule (DZD)", "Coût total (DZD)"];
 function simRow(s) {
-  return [s.date.split("-").reverse().join("/"), s.marque, s.modele, s.annee, s.cylindree,
-    s.prix_usd, s.fret_usd, s.taux_change, s.prix_dzd, s.fret_dzd, s.valeur_douaniere,
-    s.taux_douane * 100, s.droits_douane, s.base_tva, s.tva, s.trans, s.port,
-    s.taxev || 0, s.cout_total];
+  return [s.date.split("-").reverse().join("/"), s.marque, s.modele, s.annee, s.devise || "USD",
+    s.cylindree, s.prix_usd, s.fret_usd, s.taux_change,
+    s.taux_fret && s.taux_fret > 0 ? s.taux_fret : s.taux_change, s.prix_dzd, s.fret_dzd,
+    s.valeur_douaniere, s.taux_douane * 100, s.droits_douane, s.base_tva, s.tva,
+    s.trans, s.port, s.taxev || 0, s.cout_total];
 }
 function doExportCalc(kind) {
   const v = currentSimObject(); if (!v) return;
   if (kind === "csv") downloadCSV("simulation.csv", [CSV_HEADERS, simRow(Object.assign({}, v, compute(v)))]);
   else modal("Export Excel", "L'export Excel (.xlsx) est disponible dans l'application desktop.\n"
       + "Dans cet aperçu, utilisez l'export CSV (compatible Excel).", [{ label: "OK", value: "ok" }]);
+}
+
+/* ---------------- Devises (USD / EUR / CNY) --------------------- */
+const DEVISE_FREIGHT_KEY = { USD: "tauxFretUsd", EUR: "tauxFretEur", CNY: "tauxFretCny" };
+function rateDefaultFor(devise, freight) {
+  return settings[(freight ? DEVISE_FREIGHT_KEY : DEVISE_RATE_KEY)[devise]] || settings.taux;
+}
+function updateCurrencyLabels(devise) {
+  devise = devise || $("f-devise").value || "USD";
+  $("l-prix").textContent = "Prix véhicule (" + devise + ")";
+  $("l-fret").textContent = "Fret (" + devise + ")";
+  $("l-taux").textContent = "Taux achat (DA/" + devise + ")";
+  $("l-tauxfret").textContent = "Taux fret (DA/" + devise + ")";
+}
+function onDeviseChanged() {
+  const devise = $("f-devise").value;
+  updateCurrencyLabels(devise);
+  const cur = parseNum($("f-taux").value);
+  if (isNaN(cur) || cur === defaultTaux) {
+    const nd = rateDefaultFor(devise);
+    $("f-taux").value = decStr(nd);
+    defaultTaux = nd;
+  }
+  const curFret = parseNum($("f-tauxfret").value);
+  if (isNaN(curFret) || curFret === defaultTauxFret) {
+    const ndF = rateDefaultFor(devise, true);
+    $("f-tauxfret").value = decStr(ndF);
+    defaultTauxFret = ndF;
+  }
+  onInputChanged();
 }
 
 /* Recalcul silencieux à la volée */
@@ -828,9 +883,10 @@ function refreshHistory() {
     tr.innerHTML = "<td>" + s.date.split("-").reverse().join("/") + "</td>"
       + "<td>" + esc(s.marque) + "</td><td>" + esc(s.modele) + "</td>"
       + '<td class="num">' + s.annee + "</td>"
-      + '<td class="num">' + fmtUSD2(s.prix_usd) + "</td>"
-      + '<td class="num">' + fmtUSD2(s.fret_usd) + "</td>"
+      + '<td class="num">' + fmt(s.prix_usd, 2) + " " + (s.devise || "USD") + "</td>"
+      + '<td class="num">' + fmt(s.fret_usd, 2) + " " + (s.devise || "USD") + "</td>"
       + '<td class="num">' + fmt(s.taux_change, 2) + "</td>"
+      + '<td class="num">' + fmt(s.taux_fret && s.taux_fret > 0 ? s.taux_fret : s.taux_change, 2) + "</td>"
       + '<td class="num total">' + fmtDA2(s.cout_total) + "</td>";
     tr.onclick = () => { histSelectedId = s.id; refreshHistory(); };
     tr.ondblclick = () => openSim(s.id);
@@ -851,6 +907,9 @@ function openSim(id) {
   $("f-cyl").value = decStr(s.cylindree); $("f-prix").value = decStr(s.prix_usd);
   $("f-fret").value = decStr(s.fret_usd); $("f-taux").value = decStr(s.taux_change);
   $("f-taxev").value = decStr(s.taxev || 0);
+  $("f-devise").value = DEVISES.includes(s.devise) ? s.devise : "USD";
+  updateCurrencyLabels();
+  $("f-tauxfret").value = decStr(s.taux_fret && s.taux_fret > 0 ? s.taux_fret : s.taux_change);
   $("f-date").value = s.date.split("-").reverse().join("/");
   editingId = s.id; lastResult = Object.assign({}, s);
   displayResult(s);
@@ -913,33 +972,48 @@ function loadEvolution() {
 
   $("e-rows").innerHTML = pts.map(s =>
     "<tr><td>" + s.date.split("-").reverse().join("/") + "</td>"
-    + '<td class="num">' + fmtUSD(s.prix_usd) + "</td>"
+    + "<td>" + (s.devise || "USD") + "</td>"
+    + '<td class="num">' + fmt(s.prix_usd) + " " + (s.devise || "USD") + "</td>"
     + '<td class="num">' + fmtDA(s.cout_total) + "</td></tr>").join("");
+
+  const devises = [...new Set(pts.map(s => s.devise || "USD"))];
+  const mixed = devises.length > 1;
+  const dv = mixed ? null : devises[0];
+  const fmtD = v => dv ? fmt(v) + " " + dv : "—";
 
   const prix = pts.map(s => s.prix_usd);
   const [premier, dernier] = [prix[0], prix[prix.length - 1]];
   const variation = dernier - premier;
   const varPct = premier !== 0 ? r2(variation / premier * 100) : null;
   const color = variation < 0 ? "var(--green)" : variation > 0 ? "var(--red)" : "#0f172a";
-  $("s-premier").textContent = fmtUSD(premier);
-  $("s-dernier").textContent = fmtUSD(dernier);
-  $("s-var").textContent = fmtSigned(variation);   $("s-var").style.color = color;
+  if (mixed) {
+    clearEvo();
+    chart.innerHTML = '<div class="empty-note">⚠ Devises mélangées dans cet historique — '
+      + "les statistiques ne sont pas comparables.</div>";
+    return;
+  }
+  $("s-premier").textContent = fmtD(premier);
+  $("s-dernier").textContent = fmtD(dernier);
+  $("s-var").textContent = (variation > 0 ? "+" : "") + fmt(variation) + " " + dv;
+  $("s-var").style.color = color;
   $("s-varpct").textContent = varPct == null ? "—" : fmtSignedPct(varPct);
   $("s-varpct").style.color = color;
-  $("s-min").textContent = fmtUSD(Math.min(...prix));
-  $("s-max").textContent = fmtUSD(Math.max(...prix));
-  $("s-moy").textContent = fmtUSD(r2(prix.reduce((x, y) => x + y, 0) / prix.length));
+  $("s-min").textContent = fmtD(Math.min(...prix));
+  $("s-max").textContent = fmtD(Math.max(...prix));
+  $("s-moy").textContent = fmtD(r2(prix.reduce((x, y) => x + y, 0) / prix.length));
   $("s-n").textContent = pts.length;
 
-  drawChart(pts.map(s => ({ d: s.date.split("-").reverse().join("/"), v: s.prix_usd })));
+  drawChart(pts.map(s => ({ d: s.date.split("-").reverse().join("/"), v: s.prix_usd })), dv);
 }
 function clearEvo() {
+  /* remise à zéro des statistiques (valeurs et couleurs) */
   ["premier", "dernier", "var", "varpct", "min", "max", "moy", "n"].forEach(k => {
     $("s-" + k).textContent = "—"; $("s-" + k).style.color = "";
   });
   $("e-rows").innerHTML = "";
 }
-function drawChart(points) {
+function drawChart(points, devise) {
+  devise = devise || "USD";
   const W = 760, H = 340, L = 64, R = 16, T = 18, B = 40;
   const vs = points.map(p => p.v);
   let vmin = Math.min(...vs), vmax = Math.max(...vs);
@@ -967,6 +1041,7 @@ function drawChart(points) {
     + '<line x1="' + L + '" y1="' + (H - B) + '" x2="' + (W - R) + '" y2="' + (H - B) + '" stroke="#cbd5e1"/>'
     + '<polyline points="' + poly + '" fill="none" stroke="#1d4ed8" stroke-width="2"/>' + dots + labels
     + '<text x="' + ((L + W - R) / 2) + '" y="' + (H - 2) + '" text-anchor="middle" font-size="10" fill="#94a3b8">Date</text>'
+    + '<text x="20" y="12" font-size="10" fill="#94a3b8">Prix (' + devise + ')</text>'
     + "</svg>";
 }
 
@@ -976,11 +1051,17 @@ function loadSettings() {
   $("p-ddle").value = decStr(settings.ddle); $("p-ddsup").value = decStr(settings.ddsup);
   $("p-seuil").value = decStr(settings.seuil); $("p-trans").value = decStr(settings.trans);
   $("p-port").value = decStr(settings.port); $("p-taxev").value = decStr(settings.taxev);
+  $("p-tauxeur").value = decStr(settings.tauxEur); $("p-tauxcny").value = decStr(settings.tauxCny);
+  $("p-tauxfretusd").value = decStr(settings.tauxFretUsd);
+  $("p-tauxfreteur").value = decStr(settings.tauxFretEur);
+  $("p-tauxfretcny").value = decStr(settings.tauxFretCny);
 }
 function saveSettings() {
   const get = id => parseNum($(id).value);
   const t = get("p-taux"), tva = get("p-tva"), le = get("p-ddle"), sup = get("p-ddsup");
   const seuil = get("p-seuil"), tr = get("p-trans"), po = get("p-port"), tv = get("p-taxev");
+  const te = get("p-tauxeur"), tc = get("p-tauxcny");
+  const tfu = get("p-tauxfretusd"), tfe = get("p-tauxfreteur"), tfc = get("p-tauxfretcny");
   const bad = msg => modal("Paramètres invalides", msg, [{ label: "Corriger", value: "ok" }]);
   if (!(t > 0)) return bad("Le taux de change doit être supérieur à 0.");
   if (!(tva >= 0 && tva <= 100)) return bad("Le taux de TVA doit être compris entre 0 et 100 %.");
@@ -989,7 +1070,12 @@ function saveSettings() {
   if (!(seuil >= 0.1 && seuil <= 20)) return bad("Le seuil de cylindrée doit être compris entre 0.1 et 20 litres.");
   if (!(tr >= 0) || !(po >= 0) || isNaN(tv) || tv < 0)
     return bad("Les frais et la taxe véhicule ne peuvent pas être négatifs.");
-  settings = { taux: t, tva, ddle: le, ddsup: sup, seuil, trans: tr, port: po, taxev: tv };
+  if (!(te > 0) || !(tc > 0)) return bad("Les taux de change doivent être supérieurs à 0.");
+  if (!(tfu > 0) || !(tfe > 0) || !(tfc > 0))
+    return bad("Les taux de fret doivent être supérieurs à 0.");
+  settings = { taux: t, tauxEur: te, tauxCny: tc,
+               tauxFretUsd: tfu, tauxFretEur: tfe, tauxFretCny: tfc,
+               tva, ddle: le, ddsup: sup, seuil, trans: tr, port: po, taxev: tv };
   recomputeAll(); persist(); loadSettings(); refreshHistory(); fillEvoSelectors();
   // Les champs du formulaire suivent la valeur par défaut, comme dans l'app desktop
   const curTaux = parseNum($("f-taux").value);
@@ -1009,10 +1095,11 @@ $("b-reset").onclick = doReset;
 $("b-copy").onclick = doCopy;
 $("b-csv").onclick = () => doExportCalc("csv");
 $("b-xlsx").onclick = () => doExportCalc("xlsx");
-["f-cyl", "f-prix", "f-fret", "f-taux", "f-taxev"].forEach(id => {
+["f-cyl", "f-prix", "f-fret", "f-taux", "f-tauxfret", "f-taxev"].forEach(id => {
   $(id).addEventListener("input", onInputChanged);
   $(id).addEventListener("keydown", e => { if (e.key === "Enter") doCalculate(); });
 });
+$("f-devise").addEventListener("change", onDeviseChanged);
 $("f-marque").addEventListener("input", onInputChanged);
 $("f-modele").addEventListener("input", onInputChanged);
 $("f-date").addEventListener("input", onInputChanged);
@@ -1055,7 +1142,9 @@ $("f-taux").value = decStr(settings.taux);
 $("f-taxev").value = decStr(settings.taxev);
 $("f-date").value = todayFR();
 defaultTaux = settings.taux;
+defaultTauxFret = settings.tauxFretUsd;
 defaultTaxev = settings.taxev;
+updateCurrencyLabels("USD");
 loadSettings(); refreshHistory(); fillEvoSelectors();
 </script>
 </body>
