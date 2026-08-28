@@ -38,6 +38,7 @@ class Simulation:
     frais_portuaires: Decimal
     taxe_vehicule: Decimal
     cout_total: Decimal
+    devise: str = "USD"  # devise du prix/fret saisis
     id: int | None = None
 
     @property
@@ -86,6 +87,7 @@ class Simulation:
             frais_portuaires=result.frais_portuaires,
             taxe_vehicule=result.taxe_vehicule,
             cout_total=result.cout_total,
+            devise=result.devise,
         )
 
     def duplicate(self, new_date: date) -> Simulation:

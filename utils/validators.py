@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from services.calculator import DEVISES
 from utils.currency import parse_decimal
 
 MIN_YEAR = 1950
@@ -35,6 +36,7 @@ class SimulationInput:
     taux_change: Decimal
     date_simulation: date
     taxe_vehicule: Decimal = Decimal("0")  # optionnel : vide = 0
+    devise: str = "USD"
 
 
 def _parse_positive(
@@ -66,6 +68,7 @@ def validate_simulation_input(
     taux_change: str,
     date_simulation: date,
     taxe_vehicule: str = "",
+    devise: str = "USD",
     require_identity: bool = False,
 ) -> SimulationInput:
     """Valide l'ensemble de la saisie et renvoie des valeurs normalisées.
@@ -118,6 +121,9 @@ def validate_simulation_input(
         "Le taux de change doit être supérieur à 0.",
     )
 
+    if devise not in DEVISES:
+        raise ValidationError("Devise invalide.")
+
     # Taxe véhicule : champ optionnel, vide = 0, jamais négatif
     taxe_value = Decimal("0")
     raw_taxe = (taxe_vehicule or "").strip()
@@ -141,6 +147,7 @@ def validate_simulation_input(
         taux_change=taux_value,
         date_simulation=date_simulation,
         taxe_vehicule=taxe_value,
+        devise=devise,
     )
 
 
@@ -156,6 +163,8 @@ class SettingsInput:
     frais_transitaire: Decimal
     frais_portuaires: Decimal
     taxe_vehicule: Decimal
+    taux_eur: Decimal = Decimal("270")
+    taux_cny: Decimal = Decimal("35")
 
     def as_dict(self) -> dict[str, str]:
         from utils.currency import decimal_to_str
@@ -169,6 +178,8 @@ class SettingsInput:
             "frais_transitaire": decimal_to_str(self.frais_transitaire),
             "frais_portuaires": decimal_to_str(self.frais_portuaires),
             "taxe_vehicule": decimal_to_str(self.taxe_vehicule),
+            "taux_eur": decimal_to_str(self.taux_eur),
+            "taux_cny": decimal_to_str(self.taux_cny),
         }
 
 
@@ -182,6 +193,8 @@ def validate_settings_input(
     frais_transitaire: str,
     frais_portuaires: str,
     taxe_vehicule: str = "0",
+    taux_eur: str = "270",
+    taux_cny: str = "35",
 ) -> SettingsInput:
     def parse_or(raw: str, message: str) -> Decimal:
         try:
@@ -223,6 +236,10 @@ def validate_settings_input(
     taxe_vehicule_value = parse_or(
         taxe_vehicule, "Veuillez saisir un montant de taxe véhicule valide."
     )
+    taux_eur_value = parse_or(taux_eur, "Veuillez saisir un taux EUR/DZD valide.")
+    taux_cny_value = parse_or(taux_cny, "Veuillez saisir un taux CNY/DZD valide.")
+    if taux_eur_value <= 0 or taux_cny_value <= 0:
+        raise ValidationError("Les taux de change doivent être supérieurs à 0.")
     if transitaire < 0 or portuaires < 0 or taxe_vehicule_value < 0:
         raise ValidationError("Les frais et taxes ne peuvent pas être négatifs.")
 
@@ -235,4 +252,6 @@ def validate_settings_input(
         frais_transitaire=transitaire,
         frais_portuaires=portuaires,
         taxe_vehicule=taxe_vehicule_value,
+        taux_eur=taux_eur_value,
+        taux_cny=taux_cny_value,
     )

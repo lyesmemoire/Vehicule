@@ -170,11 +170,18 @@ Le fichier `assets/data/brands_models.json` est embarqué dans l'exécutable
    `main.py`, `scripts/build_windows.py`, `assets/version_info.txt` (2 lignes),
    et l'en-tête de `docs/apercu_interactif.html` (aperçu web).
 2. Ajouter une entrée dans `CHANGELOG.md` (Ajouts / Modifiés / Corrigés / Supprimés).
-3. `python scripts/dev.py check` → tout doit être vert (lint + 15 tests + UI).
+3. `python scripts/dev.py check` → tout doit être vert (lint + tests + UI).
 4. `python scripts/dev.py build` → tester `dist\VehicleCostCalculator\…exe` sur un
-   PC Windows **sans Python**.
+   PC Windows **sans Python** *(ou laisser la CI le faire, étape 6)*.
 5. Reconstruire l'archive de diffusion (ZIP du dossier projet sans `__pycache__`).
-6. Enregistrer le tout dans Git (voir 3.2) avec un message de version.
+6. **Publication automatique** : pousser un tag — la CI GitHub construit l'exécutable
+   sur Windows et crée la Release avec le `.zip` + SHA-256 :
+   ```bat
+   git tag v1.3.1
+   git push origin main --tags
+   ```
+   (le tag doit être identique à `APP_VERSION`, sinon le build échoue — garde-fou
+   intentionnel ; voir `.github/workflows/release.yml`).
 
 ### 3.2 Git (recommandé)
 
@@ -214,14 +221,15 @@ lance `ruff check` et les tests métier **sans Qt** (grâce au découplage).
 
 Issues classées du plus rentable (voir `AUDIT_TECHNIQUE.md` §5 pour le détail) :
 
-1. **Sauvegarde/restauration de la base** (copie `.bak` au démarrage + bouton
-   exporter/importer dans Paramètres).
+1. ~~Sauvegarde/restauration de la base~~ → **livré en v1.3.0**.
 2. Renommage de la colonne SQL `date` → `simulation_date` (mot réservé).
 3. Stockage monétaire en centimes entiers (portabilité maximale).
 4. Gestion du catalogue utilisateur (renommage/suppression marques/modèles).
 5. Export PDF / impression d'une simulation.
 6. Comparateur multi-véhicules dans l'onglet Évolution.
 7. Tests UI `pytest-qt` + couverture ; signature de code Windows ; i18n.
+8. Alertes prix cible dans l'onglet Évolution ; notes + frais divers par simulation.
+9. Vrai installateur Windows (Inno Setup) en complément du `.zip` de Release.
 
 ## 6. Migration future web / mobile
 

@@ -26,7 +26,7 @@ from database.db import DatabaseError
 from database.repositories import SimulationRepository
 from models.simulation import Simulation
 from ui.components import Panel, field_label, page_title, show_db_error
-from utils.currency import format_dzd, format_number, format_usd
+from utils.currency import format_dzd, format_money, format_number
 from utils.exporter import ExportError, export_simulations_csv, export_simulations_excel
 
 
@@ -40,9 +40,9 @@ class SimulationTableModel(QAbstractTableModel):
         "Marque",
         "Modèle",
         "Année",
-        "Prix (USD)",
-        "Fret (USD)",
-        "Taux (DA/USD)",
+        "Prix",
+        "Fret",
+        "Taux",
         "Coût total (DZD)",
     ]
 
@@ -97,7 +97,8 @@ class SimulationTableModel(QAbstractTableModel):
 
     @staticmethod
     def _display_text(sim: Simulation, col: int) -> str:
-        # Harmonisation : tous les montants du tableau à 2 décimales
+        # Harmonisation : tous les montants du tableau à 2 décimales ;
+        # prix/fret affichés dans la devise de la simulation.
         if col == 0:
             return sim.date.strftime("%d/%m/%Y")
         if col == 1:
@@ -107,9 +108,9 @@ class SimulationTableModel(QAbstractTableModel):
         if col == 3:
             return str(sim.annee)
         if col == 4:
-            return format_usd(sim.prix_usd, 2)
+            return format_money(sim.prix_usd, sim.devise, 2)
         if col == 5:
-            return format_usd(sim.fret_usd, 2)
+            return format_money(sim.fret_usd, sim.devise, 2)
         if col == 6:
             return format_number(sim.taux_change, 2)
         if col == 7:

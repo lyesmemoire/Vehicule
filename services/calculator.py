@@ -35,7 +35,14 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "frais_transitaire": "70000",
     "frais_portuaires": "130000",
     "taxe_vehicule": "0",
+    "taux_eur": "270",
+    "taux_cny": "35",
 }
+
+# Devises gérées et la clé de paramètre de leur taux par défaut.
+DEVISES = ("USD", "EUR", "CNY")
+DEVISE_RATE_KEYS = {"USD": "taux_change", "EUR": "taux_eur", "CNY": "taux_cny"}
+DEVISE_RATE_FALLBACKS = {"USD": "250", "EUR": "270", "CNY": "35"}
 
 
 def _to_decimal(raw: object, fallback: Decimal) -> Decimal:
@@ -100,6 +107,7 @@ class SimulationResult:
     frais_portuaires: Decimal
     taxe_vehicule: Decimal
     cout_total: Decimal
+    devise: str = "USD"  # devise du prix et du fret saisis
 
 
 def convert_to_dzd(montant_usd: Decimal, taux_usd_dzd: Decimal) -> Decimal:
@@ -160,6 +168,7 @@ def compute_cost(
     taux_change: Decimal,
     params: CalculationParams | None = None,
     taxe_vehicule: Decimal = Decimal("0"),
+    devise: str = "USD",
 ) -> SimulationResult:
     """Calcule l'ensemble des composantes du coût d'importation."""
     params = params or CalculationParams.defaults()
@@ -208,4 +217,5 @@ def compute_cost(
         frais_portuaires=_q2(params.frais_portuaires),
         taxe_vehicule=_q2(taxe_vehicule),
         cout_total=cout_total,
+        devise=devise,
     )

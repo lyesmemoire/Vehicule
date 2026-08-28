@@ -24,7 +24,12 @@ from database.repositories import SimulationRepository
 from services.price_history import compute_price_stats
 from ui.components import Panel, field_label, section_title, show_db_error
 from ui.simple_chart import SimpleLineChart
-from utils.currency import format_dzd, format_signed_percent, format_signed_usd, format_usd
+from utils.currency import (
+    format_dzd,
+    format_money,
+    format_signed_percent,
+    format_signed_usd,
+)
 
 try:  # QtCharts est fourni avec PySide6 ; on garde un plan B sans dépendance.
     from PySide6.QtCharts import (
@@ -58,6 +63,7 @@ class PriceHistoryPage(QWidget):
         super().__init__(parent)
         self.sim_repo = sim_repo
         self._loading = False
+        self._chart_devise = "USD"
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -94,16 +100,17 @@ class PriceHistoryPage(QWidget):
         left_layout.setSpacing(8)
         left_layout.addWidget(section_title("Historique chronologique"))
 
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Date", "Prix (USD)", "Coût total (DZD)"])
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(
+            ["Date", "Devise", "Prix", "Coût total (DZD)"]
+        )
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        for col in range(4):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         self.table.setMinimumHeight(180)
         left_layout.addWidget(self.table)
 
@@ -134,7 +141,16 @@ class PriceHistoryPage(QWidget):
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(16, 14, 16, 14)
         right_layout.setSpacing(8)
-        right_layout.addWidget(section_title("Évolution du prix (USD)"))
+        self.chart_title = section_title("Évolution du prix")
+        right_layout.addWidget(self.chart_title)
+        self.mixed_label = QLabel(
+            "⚠ Devises mélangées dans cet historique : "
+            "les statistiques ne sont pas comparables."
+        )
+        self.mixed_label.setObjectName("warnLabel")
+        self.mixed_label.setWordWrap(True)
+        self.mixed_label.hide()
+        right_layout.addWidget(self.mixed_label)
 
         self.stack = QStackedWidget()
         if HAS_QTCHARTS:
@@ -278,13 +294,18 @@ class PriceHistoryPage(QWidget):
             self._show_empty()
             return
 
-        # Tableau chronologique
+        # Tableau chronologique (chaque relevé avec sa devise)
         self.table.setRowCount(len(stats.points))
-        for row, (sim_date, prix, cout) in enumerate(stats.points):
-            date_item = QTableWidgetItem(sim_date.strftime("%d/%m/%Y"))
-            prix_item = QTableWidgetItem(format_usd(prix))
-            cout_item = QTableWidgetItem(format_dzd(cout))
-            for col, item in enumerate((date_item, prix_item, cout_item)):
+        for row, (simulation, (sim_date, prix, cout)) in enumerate(
+            zip(sims, stats.points, strict=True)
+        ):
+            items = [
+                QTableWidgetItem(sim_date.strftime("%d/%m/%Y")),
+                QTableWidgetItem(simulation.devise),
+                QTableWidgetItem(format_money(prix, simulation.devise)),
+                QTableWidgetItem(format_dzd(cout)),
+            ]
+            for col, item in enumerate(items):
                 if col > 0:
                     item.setTextAlignment(
                         int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -292,12 +313,28 @@ class PriceHistoryPage(QWidget):
                 self.table.setItem(row, col, item)
         self.table.resizeColumnsToContents()
 
-        # Statistiques
-        self.stat_labels["premier"].setText(format_usd(stats.premier))
-        self.stat_labels["dernier"].setText(format_usd(stats.dernier))
-        self.stat_labels["minimum"].setText(format_usd(stats.minimum))
-        self.stat_labels["maximum"].setText(format_usd(stats.maximum))
-        self.stat_labels["moyenne"].setText(format_usd(stats.moyenne))
+        # Devises : si elles sont mélangées, les statistiques ne sont pas comparables
+        devises = sorted({s.devise for s in sims})
+        mixed = len(devises) > 1
+        self.mixed_label.setVisible(mixed)
+        devise = devises[0] if not mixed else ""
+        self.chart_title.setText(f"Évolution du prix ({devise})" if devise else "Évolution du prix")
+        self._chart_devise = devise or "USD"
+
+        if mixed:
+            for label in self.stat_labels.values():
+                label.setText("—")
+                label.setStyleSheet("")
+            self._update_chart([])
+            return
+
+        # Statistiques (devise unique)
+        fmt_dev = lambda v: format_money(v, devise)  # noqa: E731 — helper local
+        self.stat_labels["premier"].setText(fmt_dev(stats.premier))
+        self.stat_labels["dernier"].setText(fmt_dev(stats.dernier))
+        self.stat_labels["minimum"].setText(fmt_dev(stats.minimum))
+        self.stat_labels["maximum"].setText(fmt_dev(stats.maximum))
+        self.stat_labels["moyenne"].setText(fmt_dev(stats.moyenne))
         self.stat_labels["count"].setText(str(stats.count))
 
         variation_color = "#0f172a"
@@ -305,7 +342,9 @@ class PriceHistoryPage(QWidget):
             variation_color = "#15803d"
         elif stats.variation > 0:
             variation_color = "#b91c1c"
-        self.stat_labels["variation"].setText(format_signed_usd(stats.variation))
+        self.stat_labels["variation"].setText(
+            format_signed_usd(stats.variation).replace("USD", devise)
+        )
         self.stat_labels["variation"].setStyleSheet(f"color: {variation_color};")
         self.stat_labels["variation_pct"].setText(
             format_signed_percent(stats.variation_pct) if stats.variation_pct is not None else "—"
@@ -321,6 +360,9 @@ class PriceHistoryPage(QWidget):
         for label in self.stat_labels.values():
             label.setText("—")
             label.setStyleSheet("")
+        self.mixed_label.hide()
+        self.chart_title.setText("Évolution du prix")
+        self._chart_devise = "USD"
         self._update_chart([])
 
     def _update_chart(self, points: list) -> None:
@@ -337,7 +379,7 @@ class PriceHistoryPage(QWidget):
         self.stack.setCurrentIndex(0)
         if HAS_QTCHARTS:
             series = QLineSeries()
-            series.setName("Prix (USD)")
+            series.setName(f"Prix ({self._chart_devise})")
             first_date, last_date = points[0][0], points[-1][0]
             values = [v for _, v in points]
             for point_date, value in points:
@@ -365,7 +407,7 @@ class PriceHistoryPage(QWidget):
                 QDateTime(QDate(end_date.year, end_date.month, end_date.day), QTime(0, 0)),
             )
             axis_y = QValueAxis()
-            axis_y.setTitleText("Prix (USD)")
+            axis_y.setTitleText(f"Prix ({self._chart_devise})")
             axis_y.setLabelFormat("%.0f")
             margin = max((max(values) - min(values)) * 0.1, 10.0)
             axis_y.setRange(min(values) - margin, max(values) + margin)

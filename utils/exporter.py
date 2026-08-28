@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 from utils.currency import (
     decimal_to_str,
     format_dzd,
+    format_money,
     format_percent,
-    format_usd,
 )
 
 if TYPE_CHECKING:  # évite une dépendance circulaire à l'exécution
@@ -35,10 +35,11 @@ HEADERS = [
     "Marque",
     "Modèle",
     "Année",
+    "Devise",
     "Cylindrée (L)",
-    "Prix véhicule (USD)",
-    "Fret (USD)",
-    "Taux USD/DZD",
+    "Prix véhicule",
+    "Fret",
+    "Taux de change",
     "Prix véhicule (DZD)",
     "Fret (DZD)",
     "Valeur douanière (DZD)",
@@ -52,7 +53,7 @@ HEADERS = [
     "Coût total (DZD)",
 ]
 
-_NUMERIC_COLUMNS = list(range(5, 19))  # colonnes E..R numériques
+_NUMERIC_COLUMNS = list(range(5, 20))  # colonnes F..T numériques (devise = texte)
 
 
 def _row_from_sim(sim: Simulation) -> list:
@@ -61,6 +62,7 @@ def _row_from_sim(sim: Simulation) -> list:
         sim.marque,
         sim.modele,
         sim.annee,
+        sim.devise,
         float(sim.cylindree),
         float(sim.prix_usd),
         float(sim.fret_usd),
@@ -141,7 +143,7 @@ def export_simulations_excel(path: str | Path, sims: list[Simulation]) -> Path:
                 if c in _NUMERIC_COLUMNS:
                     cell.number_format = "#,##0.00"
 
-        widths = [12, 14, 16, 8, 11, 16, 12, 12, 17, 14, 18, 12, 17, 16, 14, 16, 16, 14, 17]
+        widths = [12, 14, 16, 8, 8, 11, 15, 13, 12, 17, 14, 18, 12, 17, 16, 14, 16, 16, 14, 17]
         for c, width in enumerate(widths, start=1):
             sheet.column_dimensions[get_column_letter(c)].width = width
         sheet.freeze_panes = "A2"
@@ -156,8 +158,8 @@ def simulation_summary_text(sim: Simulation) -> str:
     lines = [
         f"{sim.marque.upper()} {sim.modele.upper()} {sim.annee}",
         f"Cylindrée : {decimal_to_str(sim.cylindree)} L",
-        f"Prix véhicule : {format_usd(sim.prix_usd)}",
-        f"Fret : {format_usd(sim.fret_usd)}",
+        f"Prix véhicule : {format_money(sim.prix_usd, sim.devise)}",
+        f"Fret : {format_money(sim.fret_usd, sim.devise)}",
         f"Taux : {decimal_to_str(sim.taux_change)} DA/USD",
         "",
         f"Prix véhicule : {format_dzd(sim.prix_dzd)}",

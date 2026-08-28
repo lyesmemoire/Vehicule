@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "VehicleCostCalculator"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 
 def check_pyinstaller() -> None:
