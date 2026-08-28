@@ -26,7 +26,7 @@ from database.db import DatabaseError
 from database.repositories import SimulationRepository
 from models.simulation import Simulation
 from ui.components import Panel, field_label, page_title, show_db_error
-from utils.currency import format_dzd, format_number, format_usd
+from utils.currency import format_dzd, format_money, format_number
 from utils.exporter import ExportError, export_simulations_csv, export_simulations_excel
 
 
@@ -40,9 +40,10 @@ class SimulationTableModel(QAbstractTableModel):
         "Marque",
         "Modèle",
         "Année",
-        "Prix (USD)",
-        "Fret (USD)",
-        "Taux (DA/USD)",
+        "Prix",
+        "Fret",
+        "Taux achat",
+        "Taux fret",
         "Coût total (DZD)",
     ]
 
@@ -89,15 +90,16 @@ class SimulationTableModel(QAbstractTableModel):
             return self._display_text(sim, col)
         if role == self.SORT_ROLE:
             return self._sort_key(sim, col)
-        if role == Qt.ItemDataRole.TextAlignmentRole and col in (3, 4, 5, 6, 7):
+        if role == Qt.ItemDataRole.TextAlignmentRole and col in (3, 4, 5, 6, 7, 8):
             return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        if role == Qt.ItemDataRole.ForegroundRole and col == 7:
+        if role == Qt.ItemDataRole.ForegroundRole and col == 8:
             return QColor("#15803d")
         return None
 
     @staticmethod
     def _display_text(sim: Simulation, col: int) -> str:
-        # Harmonisation : tous les montants du tableau à 2 décimales
+        # Harmonisation : tous les montants du tableau à 2 décimales ;
+        # prix/fret affichés dans la devise de la simulation.
         if col == 0:
             return sim.date.strftime("%d/%m/%Y")
         if col == 1:
@@ -107,12 +109,16 @@ class SimulationTableModel(QAbstractTableModel):
         if col == 3:
             return str(sim.annee)
         if col == 4:
-            return format_usd(sim.prix_usd, 2)
+            return format_money(sim.prix_usd, sim.devise, 2)
         if col == 5:
-            return format_usd(sim.fret_usd, 2)
+            return format_money(sim.fret_usd, sim.devise, 2)
         if col == 6:
             return format_number(sim.taux_change, 2)
         if col == 7:
+            # Anciennes lignes sans taux fret (0) : afficher le taux d'achat
+            fret_rate = sim.taux_fret if sim.taux_fret > 0 else sim.taux_change
+            return format_number(fret_rate, 2)
+        if col == 8:
             return format_dzd(sim.cout_total, 2)
         return ""
 
@@ -132,6 +138,8 @@ class SimulationTableModel(QAbstractTableModel):
             return float(sim.fret_usd)
         if col == 6:
             return float(sim.taux_change)
+        if col == 7:
+            return float(sim.taux_fret if sim.taux_fret > 0 else sim.taux_change)
         return float(sim.cout_total)
 
 
@@ -258,7 +266,9 @@ class HistoryPage(QWidget):
         header_view = self.table.horizontalHeader()
         header_view.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header_view.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        for col, width in ((0, 110), (3, 70), (4, 105), (5, 105), (6, 120), (7, 165)):
+        for col, width in (
+            (0, 110), (3, 70), (4, 105), (5, 105), (6, 100), (7, 100), (8, 165)
+        ):
             header_view.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
             self.table.setColumnWidth(col, width)
         header_view.setStretchLastSection(False)

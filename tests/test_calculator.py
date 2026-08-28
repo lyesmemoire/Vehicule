@@ -264,6 +264,213 @@ def test_builtin_catalog():
     assert "Mon Modèle" in combo_models and "Picanto" in combo_models
 
 
+def test_backup_restore():
+    """Sauvegarde/restauration de la base (v1.3)."""
+    from database.backup import (
+        backup_dir,
+        create_backup,
+        list_backups,
+        prune_auto_backups,
+        restore_backup,
+    )
+
+    repo = SimulationRepository()
+    vehicle = Vehicle("Livan", "X3 Pro", 2025, D("1.5"))
+    result = compute_cost(vehicle, D("7500"), D("1700"), D("250"))
+    sim_id = repo.save(Simulation.from_result(result, date(2026, 8, 27)))
+
+    # Sauvegarde manuelle
+    backup_path = create_backup("manual")
+    assert backup_path.exists() and backup_path.suffix == ".bak"
+    assert backup_path in list_backups()
+
+    # Modification des données…
+    repo.delete(sim_id)
+    assert repo.get(sim_id) is None
+
+    # …puis restauration : la simulation revient
+    restored = restore_backup(backup_path)
+    assert restored.exists()
+    assert repo.get(sim_id) is not None
+    assert repo.get(sim_id).cout_total == D("3347550.00")
+
+    # Une copie de sécurité de l'état avant restauration a été créée
+    assert any("_avant_restauration" in p.name for p in list_backups())
+
+    # Fichiers invalides refusés
+    import tempfile
+
+    from database.db import DatabaseError as _DbError
+
+    for content in (b"pas une base", b""):
+        _, name = tempfile.mkstemp(suffix=".bak")
+        Path(name).write_bytes(content)
+        try:
+            restore_backup(name)
+        except _DbError:
+            pass
+        else:
+            raise AssertionError("Sauvegarde invalide acceptée")
+
+    # Purge des sauvegardes automatiques (10 conservées)
+    for _ in range(13):
+        create_backup("auto")
+    prune_auto_backups()
+    autos = [p for p in list_backups() if p.stem.endswith("_auto")]
+    assert len(autos) <= 10
+    assert backup_dir().exists()
+
+
+def test_multidevise():
+    """Multi-devises (v1.3) : USD / EUR / CNY par simulation."""
+    vehicle = Vehicle("Dacia", "Logan", 2025, D("1.5"))
+
+    # USD (par défaut) : inchangé
+    r = compute_cost(vehicle, D("7500"), D("1700"), D("250"))
+    assert r.devise == "USD"
+
+    # EUR : devise enregistrée, math identique (le taux est fourni)
+    r_eur = compute_cost(vehicle, D("7500"), D("1700"), D("270"), devise="EUR")
+    assert r_eur.devise == "EUR"
+    assert r_eur.prix_dzd == D("2025000.00")
+    assert r_eur.fret_dzd == D("459000.00")
+    assert r_eur.valeur_douaniere == D("2484000.00")  # 2 025 000 + 459 000
+
+    # CNY
+    r_cny = compute_cost(vehicle, D("7500"), D("1700"), D("35"), devise="CNY")
+    assert r_cny.devise == "CNY"
+    assert r_cny.prix_dzd == D("262500.00")
+
+    # Persistance de la devise
+    repo = SimulationRepository()
+    sim_id = repo.save(Simulation.from_result(r_eur, date(2026, 8, 27)))
+    loaded = repo.get(sim_id)
+    assert loaded.devise == "EUR"
+    assert loaded.prix_usd == D("7500.00")
+
+    # Validation : devise inconnue refusée
+    from utils.validators import ValidationError, validate_simulation_input
+
+    try:
+        validate_simulation_input(
+            marque="Dacia", modele="Logan", annee=2025, cylindree="1.5",
+            prix_usd="7500", fret_usd="1700", taux_change="270",
+            date_simulation=date(2026, 8, 27), devise="GBP",
+        )
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("Devise GBP aurait dû être refusée")
+
+    # Paramètres : les taux EUR/CNY par défaut sont présents et éditables
+    settings_repo = SettingsRepository()
+    settings = settings_repo.get_all()
+    assert settings["taux_eur"] == "270"
+    assert settings["taux_cny"] == "35"
+    settings_repo.save({"taux_eur": "280", "taux_cny": "36"})
+    settings = settings_repo.get_all()
+    assert settings["taux_eur"] == "280" and settings["taux_cny"] == "36"
+    settings_repo.reset_defaults()
+
+
+def test_schema_migrations():
+    """Les bases créées par d'anciennes versions sont migrées au démarrage."""
+    import sqlite3
+
+    from database.db import connect, get_db_path, init_database
+
+    # Simule une base « ancienne » sans taxe_vehicule, devise ni base_tva
+    conn = sqlite3.connect(get_db_path())
+    conn.executescript(
+        """
+        DROP TABLE IF EXISTS simulations;
+        CREATE TABLE simulations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            marque TEXT NOT NULL,
+            modele TEXT NOT NULL,
+            annee INTEGER NOT NULL,
+            cylindree REAL NOT NULL,
+            prix_usd REAL NOT NULL,
+            fret_usd REAL NOT NULL,
+            taux_change REAL NOT NULL,
+            prix_dzd REAL NOT NULL,
+            fret_dzd REAL NOT NULL,
+            valeur_douaniere REAL NOT NULL,
+            taux_douane REAL NOT NULL,
+            droits_douane REAL NOT NULL,
+            tva REAL NOT NULL,
+            frais_transitaire REAL NOT NULL,
+            frais_portuaires REAL NOT NULL,
+            cout_total REAL NOT NULL
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    init_database()  # doit ajouter les colonnes manquantes sans erreur
+
+    conn = connect()
+    try:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(simulations)")}
+    finally:
+        conn.close()
+    assert {"taxe_vehicule", "devise", "base_tva"} <= columns
+
+
+def test_taux_fret_separe():
+    """v1.4 : taux d'achat et taux de fret distincts (parallèle vs officiel)."""
+    vehicle = Vehicle("Dacia", "Logan", 2025, D("1.5"))
+
+    # Taux distincts : achat au parallèle (250), fret au bancaire (160)
+    r = compute_cost(vehicle, D("9000"), D("1500"), D("250"), taux_fret=D("160"))
+    assert r.prix_dzd == D("2250000.00")   # 9 000 × 250
+    assert r.fret_dzd == D("240000.00")    # 1 500 × 160 (et non 375 000)
+    assert r.valeur_douaniere == D("2490000.00")
+    assert r.taux_fret == D("160.00")
+
+    # Sans taux_fret : identique au taux d'achat (compatibilité)
+    r2 = compute_cost(vehicle, D("9000"), D("1500"), D("250"))
+    assert r2.fret_dzd == D("375000.00")
+
+    # Persistance : le taux fret enregistré est rechargé
+    repo = SimulationRepository()
+    sim_id = repo.save(Simulation.from_result(r, date(2026, 8, 28)))
+    loaded = repo.get(sim_id)
+    assert loaded.taux_fret == D("160.00")
+
+    # Validation : vide = taux d'achat ; invalide refusé
+    from utils.validators import ValidationError, validate_simulation_input
+
+    base = dict(
+        marque="Dacia", modele="Logan", annee=2025, cylindree="1.5",
+        prix_usd="9000", fret_usd="1500", taux_change="250",
+        date_simulation=date(2026, 8, 28),
+    )
+    ok = validate_simulation_input(**base)
+    assert ok.taux_fret == D("250")
+    ok = validate_simulation_input(**base, taux_fret="160")
+    assert ok.taux_fret == D("160")
+    for bad in ("0", "-5", "abc"):
+        try:
+            validate_simulation_input(**base, taux_fret=bad)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError(f"taux_fret={bad!r} aurait dû être refusé")
+
+    # Paramètres : les 3 taux de fret par défaut existent et sont éditables
+    settings_repo = SettingsRepository()
+    settings = settings_repo.get_all()
+    assert settings["taux_fret_usd"] == "250"
+    assert settings["taux_fret_eur"] == "270"
+    assert settings["taux_fret_cny"] == "35"
+    settings_repo.save({"taux_fret_usd": "180"})
+    assert settings_repo.get_all()["taux_fret_usd"] == "180"
+    settings_repo.reset_defaults()
+
+
 def main() -> int:
     tests = [value for key, value in sorted(globals().items()) if key.startswith("test_")]
     failures = 0

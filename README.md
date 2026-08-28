@@ -10,10 +10,13 @@ Prix véhicule DZD + Fret DZD + Droits de douane + TVA + Transitaire
 
 - Interface française (PySide6 / Qt for Python)
 - Calculs financiers en `Decimal` (arrondi comptable au centime)
-- Historique local **SQLite** (créé automatiquement au premier démarrage)
+- **Multi-devises USD / EUR / CNY** : devise par simulation, taux par défaut
+  éditables par devise (USD 250, EUR 270, CNY 35)
+- Historique local **SQLite** (créé automatiquement au premier démarrage),
+  **sauvegarde automatique au démarrage** + création/restauration manuelle
 - Suivi de l'évolution des prix d'un même véhicule avec graphique
 - Export CSV / Excel + copie du résultat dans le presse-papiers
-- Paramètres de calcul modifiables (taux, frais fixes) stockés en base
+- Paramètres de calcul modifiables (taux, TVA, douane, frais, taxe) stockés en base
 
 ---
 
@@ -54,6 +57,14 @@ utilisateur (jamais dans `Program Files`) :
 > est embarquée dans l'application — aucune connexion requise à l'usage. Pour la
 > rafraîchir ponctuellement : `python scripts/update_vehicle_catalog.py` (Internet
 > nécessaire uniquement à ce moment-là).
+
+> **⚡ Sans rien compiler :** un tag Git construit et publie automatiquement le
+> `.exe` sur Windows (voir `.github/workflows/release.yml`) :
+> ```bat
+> git tag v1.3.0
+> git push origin v1.3.0
+> ```
+> → l'archive `.zip` apparaît dans *Releases* du dépôt GitHub, avec empreinte SHA-256.
 
 ## 3. Construire l'exécutable Windows (`VehicleCostCalculator.exe`)
 
@@ -107,7 +118,7 @@ rappelle l'emplacement de la base de données.
 
 | Élément | Valeur par défaut |
 |---|---|
-| Conversion | `montant USD × taux USD/DZD` |
+| Conversion | `montant × taux devise/DZD` (USD, EUR ou CNY) |
 | Valeur douanière | `prix véhicule DZD + fret DZD` |
 | Droits de douane | `15 %` si cylindrée ≤ **1.8 L**, sinon `30 %` |
 | TVA | `19 %` × (valeur douanière + droits) |
@@ -132,10 +143,17 @@ du prix (QtCharts, avec repli automatique sur un canvas interne si QtCharts est 
 et statistiques : premier / dernier prix, variation USD et %, minimum, maximum, moyen.
 
 ### Onglet « Paramètres »
-Taux USD/DZD, TVA, taux de douane (≤ seuil / > seuil), seuil de cylindrée,
-transitaire, frais portuaires, **taxe véhicule (valeur par défaut du formulaire)**.
+Taux USD/DZD, **EUR/DZD et CNY/DZD**, TVA, taux de douane (≤ seuil / > seuil),
+seuil de cylindrée, transitaire, frais portuaires, **taxe véhicule**.
 Bouton **Restaurer les valeurs par défaut**.
 Les paramètres sont stockés en SQLite et appliqués immédiatement au calculateur.
+
+### Sauvegarde des données (même onglet)
+- Sauvegarde **automatique à chaque démarrage** (les 10 dernières sont conservées)
+  dans `%APPDATA%\VehicleCostCalculator\backups\`.
+- Boutons : *Créer une sauvegarde*, *Restaurer une sauvegarde…* (contrôle
+  d'intégrité + copie de sécurité de l'état actuel avant restauration),
+  *Ouvrir le dossier*.
 
 ## 5. Tests
 

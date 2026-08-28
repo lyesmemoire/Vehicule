@@ -60,8 +60,17 @@ QLabel#disclaimerLabel { color: #92400e; font-size: 8.5pt; }
 QLineEdit, QComboBox, QSpinBox, QDateEdit {
     background: #ffffff;
     border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    padding: 6px 8px;
+    border-radius: 7px;
+    padding: 4px 8px;
+    min-height: 22px;
+}
+/* Champ de saisie interne des combos éditables : ni bord ni padding parasite */
+QComboBox QLineEdit {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    min-height: 18px;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDateEdit:focus {
     border: 1px solid #2563eb;
@@ -72,21 +81,33 @@ QComboBox::down-arrow {
     width: 12px; height: 8px; margin-right: 6px;
 }
 
-/* Ruban « Marque / Modèle » : liste déroulante large, arrondie, mise en valeur */
+/* Ruban « Marque / Modèle / Devise » : champ mis en valeur, hauteur homogène */
 QComboBox#ribbon {
-    min-height: 36px;
-    border-radius: 18px;
-    padding: 4px 36px 4px 14px;
+    min-height: 22px;
+    border-radius: 8px;
+    padding: 3px 30px 3px 10px;
     font-size: 10.5pt;
     font-weight: 600;
     color: #14345c;
-    border: 1.5px solid #cbd5e1;
-    background: #ffffff;
+    border: 1.5px solid #9db1c9;
+    background: #f7faff;
 }
-QComboBox#ribbon:hover  { border-color: #94a3b8; background: #fcfdff; }
-QComboBox#ribbon:focus  { border-color: #2563eb; background: #f5f9ff; }
-QComboBox#ribbon::drop-down { width: 34px; border: none; }
-QComboBox#ribbon::down-arrow { margin-right: 11px; }
+QComboBox#ribbon:hover  { border-color: #6f8cad; background: #f2f7ff; }
+QComboBox#ribbon:focus  { border-color: #2563eb; background: #ffffff; }
+QComboBox#ribbon QLineEdit {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-weight: 600;
+    color: #14345c;
+}
+QComboBox#ribbon::drop-down {
+    width: 28px; border: none; background: transparent;
+}
+QComboBox#ribbon::down-arrow {
+    image: url(__ICONS_DIR__/arrow-down.png);
+    width: 12px; height: 8px; margin-right: 6px;
+}
 QComboBox#ribbon QAbstractItemView {
     background: #ffffff;
     border: 1px solid #dbe2ea;
@@ -115,6 +136,7 @@ QSpinBox::down-arrow, QDateEdit::down-arrow {
     image: url(__ICONS_DIR__/arrow-down.png);
     width: 12px; height: 8px;
 }
+QDateEdit::drop-down { width: 24px; border: none; background: transparent; }
 
 QPushButton {
     background: #ffffff;
